@@ -1,0 +1,707 @@
+@import "tailwindcss";
+
+/* ==========================================================================
+   DESIGN TOKENS  (spec §48)
+   Semantic names only. Components consume these rather than raw hex values,
+   so the palette can move without touching a single component.
+   ========================================================================== */
+
+@theme {
+  /* Surfaces — near-black, charcoal, deep navy (spec §31) */
+  --color-ink: #04050a;
+  --color-base: #070910;
+  --color-charcoal: #0d1017;
+  --color-navy: #080d1a;
+  --color-raised: #11151e;
+
+  /* Text */
+  --color-fg: #eef1f6;
+  --color-fg-muted: #99a2b2;
+  --color-fg-faint: #5f6878;
+
+  /* Accents — one primary, one restrained secondary */
+  --color-accent: #5ccfe6;
+  --color-accent-2: #7b6cf6;
+
+  /* Borders — low-opacity light */
+  --color-line: rgba(255, 255, 255, 0.08);
+  --color-line-strong: rgba(255, 255, 255, 0.16);
+
+  /* Type families (wired to next/font CSS variables in layout.tsx) */
+  --font-display: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-space-mono), ui-monospace, "SFMono-Regular", monospace;
+}
+
+/* Non-Tailwind runtime variables. Used by hand-written CSS below. */
+:root {
+  --atmo-a: 92, 207, 230; /* cool cyan, per-section (spec §32) */
+  --atmo-b: 123, 108, 246; /* restrained violet */
+  --atmo-x: 50%;
+  --atmo-y: 38%;
+  --atmo-strength: 1;
+  --atmo-grid: 0;
+  --nav-height: 76px;
+  /* Anchor offset: the fixed bar measures 61px (60px content + its 1px rule)
+     once it collapses on scroll, which is the state it is in by the time a
+     smooth anchor scroll arrives. Reserving the taller resting height instead
+     stopped every jump ~15px short of the section. */
+  --nav-anchor-offset: 61px;
+  --ease-out-quint: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Per-section atmosphere. Set as data-atmosphere on <html> by
+   BackgroundAtmosphere. Each section gets its own light, so the page has
+   visual rhythm instead of one gradient stretched end to end (spec §32). */
+:root[data-atmosphere="home"] {
+  --atmo-a: 92, 207, 230;
+  --atmo-b: 58, 120, 220;
+  --atmo-x: 64%;
+  --atmo-y: 34%;
+  --atmo-strength: 1;
+  --atmo-grid: 0.35;
+}
+:root[data-atmosphere="about"] {
+  --atmo-a: 168, 186, 210;
+  --atmo-b: 92, 207, 230;
+  --atmo-x: 22%;
+  --atmo-y: 44%;
+  --atmo-strength: 0.62;
+  --atmo-grid: 0;
+}
+:root[data-atmosphere="skills"] {
+  --atmo-a: 92, 207, 230;
+  --atmo-b: 123, 108, 246;
+  --atmo-x: 50%;
+  --atmo-y: 50%;
+  --atmo-strength: 0.78;
+  --atmo-grid: 1;
+}
+:root[data-atmosphere="projects"] {
+  --atmo-a: 78, 170, 240;
+  --atmo-b: 123, 108, 246;
+  --atmo-x: 76%;
+  --atmo-y: 30%;
+  --atmo-strength: 1;
+  --atmo-grid: 0.5;
+}
+:root[data-atmosphere="experience"] {
+  --atmo-a: 70, 130, 190;
+  --atmo-b: 40, 60, 120;
+  --atmo-x: 24%;
+  --atmo-y: 52%;
+  --atmo-strength: 0.55;
+  --atmo-grid: 0.2;
+}
+:root[data-atmosphere="education"] {
+  --atmo-a: 96, 110, 130;
+  --atmo-b: 60, 70, 96;
+  --atmo-x: 50%;
+  --atmo-y: 60%;
+  --atmo-strength: 0.3;
+  --atmo-grid: 0;
+}
+:root[data-atmosphere="achievements"] {
+  --atmo-a: 92, 207, 230;
+  --atmo-b: 123, 108, 246;
+  --atmo-x: 38%;
+  --atmo-y: 40%;
+  --atmo-strength: 0.82;
+  --atmo-grid: 0.35;
+}
+:root[data-atmosphere="contact"] {
+  --atmo-a: 92, 207, 230;
+  --atmo-b: 92, 207, 230;
+  --atmo-x: 50%;
+  --atmo-y: 46%;
+  --atmo-strength: 0.7;
+  --atmo-grid: 0;
+}
+
+/* ==========================================================================
+   BASE
+   ========================================================================== */
+
+* {
+  min-width: 0;
+}
+
+html {
+  /* `clip` rather than `hidden`: it contains horizontal overflow without
+     creating a scroll container, which would break every sticky scene. */
+  overflow-x: clip;
+  scroll-behavior: smooth;
+  background-color: var(--color-ink);
+  -webkit-text-size-adjust: 100%;
+  /* The page reports its own position through the scroll-progress rail, so the
+     native scrollbar is a second, redundant indicator. Nothing is disabled by
+     hiding it — wheel, keyboard and anchor scrolling are untouched, and the
+     layout simply loses the gutter. */
+  scrollbar-width: none;
+}
+
+/* Firefox inherits `scrollbar-width` down the tree, which would strip the bar
+   from the panels that genuinely need one — the all-projects overlay and the
+   guide log are the only affordances those two have. Descendants opt back in. */
+html * {
+  scrollbar-width: auto;
+}
+
+/* The same removal for Chromium and Safari. `::-webkit-scrollbar` is not
+   inherited, so this reaches the root scroller only. */
+html::-webkit-scrollbar {
+  display: none;
+}
+
+body {
+  overflow-x: clip;
+  background-color: var(--color-ink);
+  color: var(--color-fg);
+  font-family: var(--font-display);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Anchored sections clear the fixed nav. */
+section[id] {
+  scroll-margin-top: var(--nav-anchor-offset);
+}
+
+::selection {
+  background: rgba(92, 207, 230, 0.26);
+  color: var(--color-fg);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+/* The custom cursor replaces the pointer only where a real mouse exists
+   (spec §30). Keyboard and touch are unaffected. */
+@media (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  :root[data-custom-cursor="on"] body,
+  :root[data-custom-cursor="on"] body * {
+    cursor: none;
+  }
+}
+
+/* ==========================================================================
+   TYPOGRAPHY SCALE  (spec §47)
+   Six distinct tiers, fluid, with editorial (not centered) defaults.
+   ========================================================================== */
+
+.t-hero {
+  font-size: clamp(2.75rem, 11vw, 9.5rem);
+  line-height: 0.9;
+  letter-spacing: -0.045em;
+  font-weight: 600;
+}
+
+.t-section {
+  font-size: clamp(2rem, 6.4vw, 5.25rem);
+  line-height: 0.94;
+  letter-spacing: -0.035em;
+  font-weight: 600;
+}
+
+.t-project {
+  font-size: clamp(1.75rem, 4.6vw, 3.5rem);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-weight: 600;
+}
+
+.t-body {
+  font-size: clamp(1rem, 1.15vw, 1.125rem);
+  line-height: 1.72;
+  color: var(--color-fg-muted);
+}
+
+.t-meta {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-fg-faint);
+}
+
+.t-label {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  color: var(--color-fg-muted);
+}
+
+/* ==========================================================================
+   3D PRIMITIVES  (spec §1, §43)
+   The whole spatial illusion is built from these four declarations.
+   ========================================================================== */
+
+.stage-3d {
+  perspective: 1200px;
+  perspective-origin: 50% 50%;
+}
+
+.layer-3d {
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+/* ==========================================================================
+   ATMOSPHERE  (spec §31)
+   Six stacked layers. Not all are active at once — the grid and points fade
+   in only for the sections that want them.
+   ========================================================================== */
+
+.atmo-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.atmo-base {
+  background:
+    radial-gradient(
+      120% 80% at 50% -10%,
+      rgba(var(--atmo-b), calc(0.1 * var(--atmo-strength))) 0%,
+      transparent 60%
+    ),
+    linear-gradient(180deg, var(--color-ink) 0%, var(--color-navy) 45%, var(--color-ink) 100%);
+}
+
+.atmo-gradient {
+  background:
+    radial-gradient(
+      64% 52% at var(--atmo-x) var(--atmo-y),
+      rgba(var(--atmo-a), calc(0.17 * var(--atmo-strength))) 0%,
+      transparent 68%
+    );
+  transition:
+    background 1400ms var(--ease-out-quint),
+    opacity 1400ms var(--ease-out-quint);
+}
+
+.atmo-light {
+  background:
+    radial-gradient(
+      38% 32% at calc(var(--atmo-x) - 14%) calc(var(--atmo-y) + 10%),
+      rgba(var(--atmo-a), calc(0.24 * var(--atmo-strength))) 0%,
+      transparent 62%
+    ),
+    radial-gradient(
+      30% 26% at calc(var(--atmo-x) + 20%) calc(var(--atmo-y) - 6%),
+      rgba(var(--atmo-b), calc(0.2 * var(--atmo-strength))) 0%,
+      transparent 64%
+    );
+  filter: blur(46px);
+  transition:
+    background 1600ms var(--ease-out-quint),
+    opacity 1200ms var(--ease-out-quint);
+}
+
+/* Very subtle noise. Kept as a repeating texture so it costs one paint. */
+.atmo-noise {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.028;
+  mix-blend-mode: overlay;
+}
+
+/* Technical line/grid layer — fades in for skills and projects only. */
+.atmo-grid {
+  background-image:
+    linear-gradient(to right, var(--color-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--color-line) 1px, transparent 1px);
+  background-size: 88px 88px;
+  opacity: calc(0.5 * var(--atmo-grid));
+  transition: opacity 1200ms var(--ease-out-quint);
+  mask-image: radial-gradient(70% 60% at 50% 45%, #000 0%, transparent 100%);
+}
+
+/* Distant points. A fixed, small set — not a particle simulator (spec §4). */
+.atmo-point {
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  border-radius: 9999px;
+  background: rgba(var(--atmo-a), 0.72);
+  animation: atmo-drift 18s var(--ease-out-quint) infinite;
+}
+
+@keyframes atmo-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+    opacity: 0.25;
+  }
+  50% {
+    transform: translate3d(0, -18px, 0);
+    opacity: 0.7;
+  }
+}
+
+/* BackgroundAtmosphere sets data-paused when the tab is hidden, so nothing
+   animates behind an invisible page (spec §39). */
+[data-paused="true"] .atmo-point {
+  animation-play-state: paused;
+}
+
+/* ==========================================================================
+   PROFILE OBJECT  (spec §5, §43)
+   Layered DOM planes around the image. Each plane sits at its own depth, so
+   cursor rotation separates them like a physical object.
+   ========================================================================== */
+
+.profile-stage {
+  position: relative;
+  aspect-ratio: 4 / 5;
+  width: 100%;
+  max-width: 430px;
+  transform-style: preserve-3d;
+  /* Vertical scroll stays available on touch: only horizontal drags are
+     claimed by the object (spec §6, §36). */
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.profile-plane {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  border-radius: 4px;
+}
+
+/* 2 — depth back */
+.profile-depth-back {
+  background: linear-gradient(150deg, rgba(var(--atmo-a), 0.1), rgba(var(--atmo-b), 0.06));
+  border: 1px solid var(--color-line);
+  filter: blur(2px);
+}
+
+/* 3 — rear shadow */
+.profile-shadow {
+  background: rgba(0, 0, 0, 0.55);
+  filter: blur(28px);
+  transform: translateZ(-90px) translateY(18px) scale(0.94);
+}
+
+/* 4 — frame */
+.profile-frame {
+  border: 1px solid var(--color-line-strong);
+  background: linear-gradient(
+    160deg,
+    rgba(255, 255, 255, 0.045) 0%,
+    rgba(255, 255, 255, 0.012) 42%,
+    transparent 100%
+  );
+  backdrop-filter: blur(2px);
+  overflow: hidden;
+}
+
+/* 5 — front image plane (or the honest typographic fallback) */
+.profile-image-plane {
+  overflow: hidden;
+  background: linear-gradient(168deg, var(--color-charcoal), var(--color-ink) 70%);
+  border: 1px solid var(--color-line);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 40px 90px -50px rgba(0, 0, 0, 0.9);
+}
+
+/* 6 — highlight sweep */
+.profile-highlight {
+  background: linear-gradient(
+    118deg,
+    transparent 34%,
+    rgba(var(--atmo-a), 0.13) 48%,
+    transparent 62%
+  );
+  mix-blend-mode: screen;
+}
+
+/* 7 — orbit arcs. Thin and restrained: the spec bans *random glowing* rings
+   (§46) while requiring orbit elements (§5), so these are hairlines whose
+   opacity is tied to the section atmosphere. */
+.profile-orbit {
+  border: 1px solid rgba(var(--atmo-a), 0.2);
+  border-radius: 9999px;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+}
+
+.profile-orbit--inner {
+  width: 118%;
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%) translateZ(-60px) rotateX(74deg);
+}
+
+.profile-orbit--outer {
+  width: 146%;
+  aspect-ratio: 1;
+  border-color: rgba(var(--atmo-b), 0.14);
+  transform: translate(-50%, -50%) translateZ(-120px) rotateX(74deg) rotateZ(24deg);
+}
+
+/* Ambient glow directly behind the object — one soft source, not a halo. */
+.profile-glow {
+  position: absolute;
+  inset: -22%;
+  border-radius: 9999px;
+  background: radial-gradient(
+    circle at 50% 46%,
+    rgba(var(--atmo-a), 0.2) 0%,
+    transparent 62%
+  );
+  filter: blur(52px);
+  transform: translateZ(-160px);
+}
+
+/* The idle float (spec §7) is driven by Motion, not a CSS animation: it shares
+   the element's single `transform` with the pointer rotation, and two sources
+   writing that property would fight. See ProfileObject.tsx. */
+
+/* Depth markers — small technical ticks at the object's corners. */
+.profile-marker {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border: 1px solid rgba(var(--atmo-a), 0.4);
+}
+
+/* ==========================================================================
+   HORIZONTAL SCENES  (spec §14, §18)
+   ========================================================================== */
+
+/* The skills section swaps between a vertical layout and the tall pinned
+   gallery. That branch lives in JS, and `useMediaQuery` must report `false`
+   until after hydration, so the pinned scene can only arrive a frame or two
+   into the page's life — taking roughly a thousand pixels of height with it and
+   dragging every section below out of place.
+   Reserving the same height in CSS removes the shift entirely. The condition
+   below is the exact CSS twin of the JS branch (`isDesktop && !reduced`), so
+   the reserved height is only ever applied in the case that will actually
+   render the scene.
+   The anchored scroll offset is the other half: the vertical layout should
+   clear the fixed nav when `#skills` is opened directly, while the pinned scene
+   wants to land flush so the viewport is filled from the first frame. */
+.skills-pinned-shell {
+  scroll-margin-top: var(--nav-anchor-offset);
+}
+
+@media (min-width: 1024px) and (prefers-reduced-motion: no-preference) {
+  .skills-pinned-shell {
+    min-height: var(--skills-pinned-height, 0px);
+    scroll-margin-top: 0;
+  }
+}
+
+.pinned-viewport {
+  position: sticky;
+  top: 0;
+  height: 100svh;
+  overflow: hidden;
+  /* Slides sit at different Z, so this scene needs its own vanishing point. */
+  perspective: 1400px;
+  perspective-origin: 50% 50%;
+}
+
+.track-horizontal {
+  display: flex;
+  height: 100%;
+  align-items: center;
+  transform-style: preserve-3d;
+  will-change: transform;
+  /*
+   * Deliberately no width. The track is sized from the component, which is what
+   * knows how many slides exist — see HorizontalSkills.tsx. Inferring it from
+   * the children does not work: they overflow this box, while the percentage
+   * translate that drives the scene resolves against the border-box, not the
+   * overflow.
+   */
+}
+
+.slide-3d {
+  flex: 0 0 auto;
+  transform-style: preserve-3d;
+  transition:
+    transform 700ms var(--ease-out-quint),
+    opacity 700ms var(--ease-out-quint),
+    filter 700ms var(--ease-out-quint);
+}
+
+/* Restrained inactive state — the spec's own example values. */
+.slide-3d[data-active="false"] {
+  transform: translateZ(-120px) scale(0.92) rotateY(4deg);
+  opacity: 0.42;
+  filter: blur(2px);
+}
+
+.slide-3d[data-active="true"] {
+  transform: translateZ(0) scale(1) rotateY(0deg);
+  opacity: 1;
+  filter: blur(0);
+}
+
+/* Project panels in the cinematic sequence (spec §18). */
+.project-panel {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  backface-visibility: hidden;
+}
+
+/* ==========================================================================
+   REVEAL PRIMITIVES
+   Section transitions vary (spec §34) — these are the shared building blocks;
+   each section composes them differently rather than repeating a fade.
+   ========================================================================== */
+
+.rule-draw {
+  transform-origin: left center;
+  transform: scaleX(0);
+  transition: transform 1100ms var(--ease-out-quint);
+  background: var(--color-line-strong);
+  height: 1px;
+}
+
+.rule-draw[data-drawn="true"] {
+  transform: scaleX(1);
+}
+
+.clip-reveal {
+  clip-path: inset(0 0 100% 0);
+  transition: clip-path 1000ms var(--ease-out-quint);
+}
+
+.clip-reveal[data-shown="true"] {
+  clip-path: inset(0 0 -10% 0);
+}
+
+/* ==========================================================================
+   FORM FIELDS  (spec §27)
+   Inputs must not read as default browser controls: no boxes, no fills — just
+   a hairline that responds on focus, with a label that lifts out of the way.
+   The label sits immediately after the input in the DOM; keep that order.
+   ========================================================================== */
+
+.field {
+  position: relative;
+}
+
+.field-input {
+  width: 100%;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--color-line-strong);
+  padding: 1.85rem 0 0.7rem;
+  color: var(--color-fg);
+  font-size: 1rem;
+  line-height: 1.5;
+  outline: none;
+  resize: vertical;
+  transition: border-color 320ms var(--ease-out-quint);
+}
+
+.field-input:hover {
+  border-color: rgba(255, 255, 255, 0.26);
+}
+
+.field-input:focus {
+  border-color: var(--color-accent);
+}
+
+.field-input[aria-invalid="true"] {
+  border-color: #f1707a;
+}
+
+.field-input::placeholder {
+  color: transparent;
+}
+
+.field-label {
+  position: absolute;
+  left: 0;
+  top: 1.25rem;
+  transform-origin: left top;
+  pointer-events: none;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--color-fg-faint);
+  transition:
+    transform 340ms var(--ease-out-quint),
+    color 340ms var(--ease-out-quint);
+}
+
+.field-input:focus + .field-label,
+.field-input:not(:placeholder-shown) + .field-label {
+  transform: translateY(-1.15rem) scale(0.86);
+  color: var(--color-accent);
+}
+
+.field-error {
+  display: block;
+  margin-top: 0.5rem;
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  color: #f1707a;
+}
+
+/* Honeypot: present in the DOM for bots, out of the layout and the tab order
+   for everyone else (spec §28). */
+.honeypot {
+  position: absolute;
+  left: -9999px;
+  top: auto;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   REDUCED MOTION  (spec §38)
+   Depth, rotation and blur animation are disabled; the site stays complete
+   and static rather than partially animated.
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .atmo-point {
+    animation: none !important;
+  }
+  .slide-3d[data-active="false"],
+  .slide-3d[data-active="true"] {
+    transform: none !important;
+    filter: none !important;
+    opacity: 1 !important;
+  }
+
+  .rule-draw {
+    transform: scaleX(1) !important;
+  }
+
+  .clip-reveal {
+    clip-path: none !important;
+  }
+
+  .atmo-noise,
+  .profile-orbit {
+    display: none;
+  }
+}
